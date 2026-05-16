@@ -109,3 +109,32 @@ if [ -d *"luci-app-netspeedtest"* ]; then
 
 	cd $PKG_PATH && echo "netspeedtest has been fixed!"
 fi
+
+#替换Lucky为全功能wanji版本
+LUCKY_FILE=$(find ./ -maxdepth 3 -type f -wholename "*/lucky/Makefile" -print -quit)
+if [ -f "$LUCKY_FILE" ]; then
+	echo " "
+
+	LUCKY_VERSION=$(wget -qO- --timeout=30 --tries=2 --user-agent="Mozilla/5.0" "https://release.66666.host/" | grep -oE 'href="\./v[0-9]+\.[0-9]+\.[0-9]+/"' | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | sort -V | tail -n 1)
+	if [ -z "$LUCKY_VERSION" ]; then
+		LUCKY_VERSION=$(wget -qO- --timeout=30 --tries=2 "https://api.github.com/repos/gdy666/lucky/releases/latest" | grep -oE '"tag_name":[[:space:]]*"v?[0-9]+\.[0-9]+\.[0-9]+"' | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n 1)
+	fi
+	if [ -z "$LUCKY_VERSION" ]; then
+		echo "Failed to get latest lucky wanji version!"
+		exit 1
+	fi
+	sed -i "s/^PKG_VERSION:=.*/PKG_VERSION:=$LUCKY_VERSION/g" "$LUCKY_FILE"
+
+	grep -q 'ifeq ($(ARCH),riscv64)' "$LUCKY_FILE" || sed -i '/ifeq ($(ARCH),aarch64)/i\ifeq ($(ARCH),riscv64)\n\tLUCKY_ARCH:=riscv64\nendif' "$LUCKY_FILE"
+	sed -i 's/@(i386||x86_64||arm||aarch64||mipsel||mips)/@(i386||x86_64||arm||aarch64||riscv64||mipsel||mips)/g' "$LUCKY_FILE"
+	sed -i 's#https://github.com/gdy666/lucky/releases/download/v$(PKG_VERSION)/$(PKG_NAME)_$(PKG_VERSION)_Linux_$(LUCKY_ARCH).tar.gz#https://release.66666.host/v$(PKG_VERSION)/$(PKG_VERSION)_wanji/$(PKG_NAME)_$(PKG_VERSION)_Linux_$(LUCKY_ARCH)_wanji.tar.gz#g' "$LUCKY_FILE"
+	sed -i 's#wget https://release.66666.host#wget --tries=3 --timeout=30 --user-agent=Mozilla/5.0 https://release.66666.host#g' "$LUCKY_FILE"
+	sed -i 's#$(PKG_NAME)_$(PKG_VERSION)_Linux_$(LUCKY_ARCH).tar.gz#$(PKG_NAME)_$(PKG_VERSION)_Linux_$(LUCKY_ARCH)_wanji.tar.gz#g' "$LUCKY_FILE"
+
+	if grep -q 'github.com/gdy666/lucky/releases/download' "$LUCKY_FILE" || ! grep -q 'release.66666.host' "$LUCKY_FILE" || ! grep -q '_wanji.tar.gz' "$LUCKY_FILE" || ! grep -q 'ifeq ($(ARCH),riscv64)' "$LUCKY_FILE" || ! grep -q 'DEPENDS:=.*riscv64' "$LUCKY_FILE"; then
+		echo "Failed to replace lucky with wanji version!"
+		exit 1
+	fi
+
+	cd $PKG_PATH && echo "lucky has been replaced with wanji version!"
+fi
