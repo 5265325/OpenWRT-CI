@@ -39,12 +39,37 @@ UPDATE_PACKAGE() {
 		rm -rf ./$REPO_NAME/
 	elif [[ "$PKG_SPECIAL" == "all" ]]; then
 		local COPY_COUNT=0
-		while IFS= read -r DIR; do
-			if [ -f "$DIR/Makefile" ] && grep -qE 'include \$\(TOPDIR\)/rules\.mk|BuildPackage' "$DIR/Makefile"; then
-				cp -rf "$DIR" ./ || return 1
-				COPY_COUNT=$((COPY_COUNT + 1))
+		local COPY_DIRS=()
+		while IFS= read -r MK_FILE; do
+			local DIR=${MK_FILE%/Makefile}
+			local PARENT=${DIR%/*}
+			local DIR_NAME=${DIR##*/}
+			local MATCHED=false
+
+			for NAME in "${PKG_LIST[@]}"; do
+				if [[ "$DIR_NAME" == "$NAME" ]]; then
+					MATCHED=true
+					break
+				fi
+			done
+			if [[ "$MATCHED" != "true" ]]; then
+				continue
 			fi
-		done < <(find ./$REPO_NAME/*/* -maxdepth 0 -type d 2>/dev/null)
+
+			# 跳过包内部源码目录的 Makefile，只保留真正的软件包目录
+			if [ -f "$PARENT/Makefile" ] && grep -qE 'include \$\(TOPDIR\)/rules\.mk|BuildPackage|include \$\(TOPDIR\)/feeds/luci/luci\.mk' "$PARENT/Makefile"; then
+				continue
+			fi
+
+			if grep -qE 'include \$\(TOPDIR\)/rules\.mk|BuildPackage|include \$\(TOPDIR\)/feeds/luci/luci\.mk' "$MK_FILE"; then
+				COPY_DIRS+=("$DIR")
+			fi
+		done < <(find ./$REPO_NAME/ -maxdepth 5 -type f -name "Makefile" 2>/dev/null)
+
+		for DIR in "${COPY_DIRS[@]}"; do
+			cp -rf "$DIR" ./ || return 1
+			COPY_COUNT=$((COPY_COUNT + 1))
+		done
 
 		if [ "$COPY_COUNT" -eq 0 ]; then
 			echo "No OpenWrt packages found in $REPO_NAME!"
@@ -92,6 +117,7 @@ UPDATE_PACKAGE "qmodem" "FUjr/QModem" "main"
 UPDATE_PACKAGE "quickfile" "sbwml/luci-app-quickfile" "main"
 UPDATE_PACKAGE "luci-app-store" "linkease/istore" "main" "all" "luci-lib-taskd luci-lib-xterm"
 UPDATE_PACKAGE "app-store-ui" "linkease/istore-ui" "main" "pkg"
+UPDATE_PACKAGE "nas-packages" "linkease/nas-packages" "master" "all" "ddnsto fastnet floatip istoreenhance kai kai_session linkmount linkease quickstart webdav2 unishare"
 UPDATE_PACKAGE "nas-packages-luci" "linkease/nas-packages-luci" "main" "all" "luci-app-ddnsto luci-app-fastnet luci-app-floatip luci-app-istoreenhance luci-app-istorex luci-app-kai luci-app-linkease luci-app-quickstart luci-app-unishare luci-lib-iform luci-mod-istorenext luci-nginxer"
 UPDATE_PACKAGE "viking" "VIKINGYFY/packages" "main" "" "luci-app-timewol luci-app-wolplus"
 UPDATE_PACKAGE "vnt" "lmq8267/luci-app-vnt" "main"
