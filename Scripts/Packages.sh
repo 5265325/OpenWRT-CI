@@ -31,14 +31,30 @@ UPDATE_PACKAGE() {
 	done
 
 	# 克隆 GitHub 仓库
-	git clone --depth=1 --single-branch --branch $PKG_BRANCH "https://github.com/$PKG_REPO.git"
+	git clone --depth=1 --single-branch --branch "$PKG_BRANCH" "https://github.com/$PKG_REPO.git" || return 1
 
 	# 处理克隆的仓库
 	if [[ "$PKG_SPECIAL" == "pkg" ]]; then
 		find ./$REPO_NAME/*/ -maxdepth 3 -type d -iname "*$PKG_NAME*" -prune -exec cp -rf {} ./ \;
 		rm -rf ./$REPO_NAME/
+	elif [[ "$PKG_SPECIAL" == "all" ]]; then
+		local COPY_COUNT=0
+		while IFS= read -r DIR; do
+			if [ -f "$DIR/Makefile" ] && grep -qE 'include \$\(TOPDIR\)/rules\.mk|BuildPackage' "$DIR/Makefile"; then
+				cp -rf "$DIR" ./ || return 1
+				COPY_COUNT=$((COPY_COUNT + 1))
+			fi
+		done < <(find ./$REPO_NAME/*/* -maxdepth 0 -type d 2>/dev/null)
+
+		if [ "$COPY_COUNT" -eq 0 ]; then
+			echo "No OpenWrt packages found in $REPO_NAME!"
+			rm -rf ./$REPO_NAME/
+			return 1
+		fi
+
+		rm -rf ./$REPO_NAME/
 	elif [[ "$PKG_SPECIAL" == "name" ]]; then
-		mv -f $REPO_NAME $PKG_NAME
+		mv -f "$REPO_NAME" "$PKG_NAME"
 	fi
 }
 
@@ -46,7 +62,7 @@ UPDATE_PACKAGE() {
 # UPDATE_PACKAGE "OpenAppFilter" "destan19/OpenAppFilter" "master" "" "custom_name1 custom_name2"
 # UPDATE_PACKAGE "open-app-filter" "destan19/OpenAppFilter" "master" "" "luci-app-appfilter oaf" 这样会把原有的open-app-filter，luci-app-appfilter，oaf相关组件删除，不会出现coremark错误。
 
-# UPDATE_PACKAGE "包名" "项目地址" "项目分支" "pkg/name，可选，pkg为从大杂烩中单独提取包名插件；name为重命名为包名"
+# UPDATE_PACKAGE "包名" "项目地址" "项目分支" "pkg/all/name，可选，pkg为从大杂烩中单独提取包名插件；all为提取仓库内所有含Makefile的软件包；name为重命名为包名"
 UPDATE_PACKAGE "argon" "sbwml/luci-theme-argon" "openwrt-25.12"
 UPDATE_PACKAGE "aurora" "eamonxg/luci-theme-aurora" "master"
 UPDATE_PACKAGE "aurora-config" "eamonxg/luci-app-aurora-config" "master"
@@ -74,9 +90,13 @@ UPDATE_PACKAGE "partexp" "sirpdboy/luci-app-partexp" "main"
 UPDATE_PACKAGE "qbittorrent" "sbwml/luci-app-qbittorrent" "master" "" "qt6base qt6tools rblibtorrent"
 UPDATE_PACKAGE "qmodem" "FUjr/QModem" "main"
 UPDATE_PACKAGE "quickfile" "sbwml/luci-app-quickfile" "main"
+UPDATE_PACKAGE "luci-app-store" "linkease/istore" "main" "all" "luci-lib-taskd luci-lib-xterm"
+UPDATE_PACKAGE "app-store-ui" "linkease/istore-ui" "main" "pkg"
+UPDATE_PACKAGE "nas-packages-luci" "linkease/nas-packages-luci" "main" "all" "luci-app-ddnsto luci-app-fastnet luci-app-floatip luci-app-istoreenhance luci-app-istorex luci-app-kai luci-app-linkease luci-app-quickstart luci-app-unishare luci-lib-iform luci-mod-istorenext luci-nginxer"
 UPDATE_PACKAGE "viking" "VIKINGYFY/packages" "main" "" "luci-app-timewol luci-app-wolplus"
 UPDATE_PACKAGE "vnt" "lmq8267/luci-app-vnt" "main"
 UPDATE_PACKAGE "lucky" "gdy666/luci-app-lucky" "main"
+UPDATE_PACKAGE "luci-app-alist" "sbwml/luci-app-alist" "main"
 
 
 #更新软件包版本
